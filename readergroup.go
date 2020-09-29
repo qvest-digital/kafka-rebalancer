@@ -11,6 +11,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+////////////////////////////////////////////////////////////////////////////
+// This is a copy of a work in progress from a PR to kafka-go
+////////////////////////////////////////////////////////////////////////////
+
 // InitReaderGroup initializes a group of readers for the provided partitions
 // when a partitions slice of the length 0 is passed the group is
 // initialized with readers for all partitions of the provided topic

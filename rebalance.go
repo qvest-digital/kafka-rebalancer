@@ -24,9 +24,12 @@ func Topic(ctx context.Context, readerConfig kafka.ReaderConfig, targetTopic str
 		Balancer:     balancer,
 	}
 
-	logger := log.With().Str("targetTopic", targetTopic).Logger()
+	rb := rebalancer{
+		log:      log.With().Str("targetTopic", targetTopic).Logger(),
+		messages: newKeyStringMessageStore(),
+	}
 
-	return rebalanceTopic(ctx, logger, group, writer)
+	return rb.rebalanceTopic(ctx, group, writer)
 }
 
 type messageReader interface {
@@ -38,14 +41,22 @@ type messageWriter interface {
 	WriteMessages(ctx context.Context, msgs ...kafka.Message) error
 }
 
-func rebalanceTopic(ctx context.Context, logger zerolog.Logger, reader messageReader, writer messageWriter) error {
+type rebalancer struct {
+	log      zerolog.Logger
+	messages messageStore
+}
+
+type messageStore interface {
+	AddMessages(msg ...kafka.Message)
+	Messages() []kafka.Message
+}
+
+func (r *rebalancer) rebalanceTopic(ctx context.Context, reader messageReader, writer messageWriter) error {
 	lag, err := reader.ReadLag(ctx)
 	if err != nil {
 		return fmt.Errorf("reading initial lag: %w", err)
 	}
 
-	// TODO what about message keys not transformable to strings
-	var msgs map[string][]kafka.Message
 	var n uint64
 
 	for lag > 0 {
@@ -61,26 +72,22 @@ func rebalanceTopic(ctx context.Context, logger zerolog.Logger, reader messageRe
 		} else if err != nil {
 			return fmt.Errorf("fetching message: %w", err)
 		}
-		if msgs[string(msg.Key)] == nil {
-			msgs[string(msg.Key)] = []kafka.Message{}
-		}
-		msgs[string(msg.Key)] = append(msgs[string(msg.Key)], msg)
+		r.messages.AddMessages(msg)
 		n++
 	}
 
 	// TODO offset merken und für consumer groups schreiben (OFFSET AUS DEM NEUEN TOPIC)
 
-	logger.Info().
+	r.log.Info().
 		Uint64("msgAmount", n).
 		Msg("Retrieved till high water mark")
 
-	// TODO sort messages by timestamp
 	// TODO write messages
 	// TODO read new messages and write them until this rebalancer is cancelled to restart the components listening to the new topics / consumer group offset aktualisieren
 
 	return nil
 }
 
-func messagesTillHighWatermark() (kafka.Message, error) {
-
+func (r *rebalancer) messagesTillHighWatermark() (kafka.Message, error) {
+	return kafka.Message{}, nil
 }
