@@ -63,10 +63,32 @@ func (r *rebalancer) rebalanceTopic(ctx context.Context, reader messageReader, w
 	if err != nil {
 		return fmt.Errorf("writing initial rebalancing batch of messages: %w", err)
 	}
+
 	// TODO offset merken und für consumer groups schreiben (OFFSET AUS DEM NEUEN TOPIC)
-	// TODO read new messages and write them until this rebalancer is cancelled to restart the components listening to the new topics / consumer group offset aktualisieren
-	// reader.StartFetching(ctx)
-	// reader.FetchMessage(ctx)
+	// TODO TODO read target topic for offsets and commit theses offsets for the configured consumer groups
+
+	reader.StartFetching(ctx)
+	for ctx.Err() == nil {
+		msg, err := reader.FetchMessage(ctx)
+		if err != nil {
+			r.log.Err(err).Msg("Fetching message failed")
+			continue
+		}
+		log := r.log.With().
+			Int64("offset", msg.Offset).
+			Int("partition", msg.Partition).
+			Str("key", string(msg.Key)).
+			Logger()
+
+		log.Debug().Msg("Fetched new message")
+
+		msg = cleanMessage(msg)
+
+		err = writer.WriteMessages(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("writing message failed: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -90,4 +112,12 @@ func (r *rebalancer) readMessagesTillHighWatermark(ctx context.Context, reader m
 		Msg("Retrieved till high water mark")
 
 	return nil
+}
+
+func cleanMessage(msg kafka.Message) kafka.Message {
+	msg.Partition = 0
+	msg.Offset = 0
+	msg.Topic = ""
+
+	return msg
 }

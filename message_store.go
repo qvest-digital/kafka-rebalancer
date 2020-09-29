@@ -30,9 +30,7 @@ func (s *MessageStore) Messages() []kafka.Message {
 
 	sort.Sort(s.msgs)
 	for i := range s.msgs {
-		s.msgs[i].Partition = 0
-		s.msgs[i].Offset = 0
-		s.msgs[i].Topic = ""
+		s.msgs[i] = cleanMessage(s.msgs[i])
 	}
 
 	return []kafka.Message(s.msgs)
