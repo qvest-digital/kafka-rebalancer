@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+	"io"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -33,8 +33,9 @@ func Topic(ctx context.Context, readerConfig kafka.ReaderConfig, targetTopic str
 }
 
 type messageReader interface {
+	FetchTillHighWatermark(ctx context.Context) (kafka.Message, error)
+	StartFetching(ctx context.Context)
 	FetchMessage(ctx context.Context) (kafka.Message, error)
-	ReadLag(ctx context.Context) (int64, error)
 }
 
 type messageWriter interface {
@@ -46,29 +47,37 @@ type rebalancer struct {
 	messages messageStore
 }
 
+//go:generate moq -out message_store_moq_test.go . messageStore
 type messageStore interface {
 	AddMessages(msg ...kafka.Message)
 	Messages() []kafka.Message
 }
 
 func (r *rebalancer) rebalanceTopic(ctx context.Context, reader messageReader, writer messageWriter) error {
-	lag, err := reader.ReadLag(ctx)
-	if err != nil {
-		return fmt.Errorf("reading initial lag: %w", err)
-	}
 
+	err := r.readMessagesTillHighWatermark(ctx, reader)
+	if err != nil {
+		return fmt.Errorf("reading initial batch of messages till high watermark: %w", err)
+	}
+	err = writer.WriteMessages(ctx, r.messages.Messages()...)
+	if err != nil {
+		return fmt.Errorf("writing initial rebalancing batch of messages: %w", err)
+	}
+	// TODO offset merken und für consumer groups schreiben (OFFSET AUS DEM NEUEN TOPIC)
+	// TODO read new messages and write them until this rebalancer is cancelled to restart the components listening to the new topics / consumer group offset aktualisieren
+	// reader.StartFetching(ctx)
+	// reader.FetchMessage(ctx)
+
+	return nil
+}
+
+func (r *rebalancer) readMessagesTillHighWatermark(ctx context.Context, reader messageReader) error {
 	var n uint64
 
-	for lag > 0 {
-		fetchCtx, cancelFetch := context.WithTimeout(ctx, 1*time.Second)
-		msg, err := reader.FetchMessage(fetchCtx)
-		cancelFetch()
-		if errors.Is(err, context.DeadlineExceeded) {
-			lag, err = reader.ReadLag(ctx)
-			if err != nil {
-				return fmt.Errorf("reading lag: %w", err)
-			}
-			continue
+	for {
+		msg, err := reader.FetchTillHighWatermark(ctx)
+		if errors.Is(err, io.EOF) {
+			break
 		} else if err != nil {
 			return fmt.Errorf("fetching message: %w", err)
 		}
@@ -76,18 +85,9 @@ func (r *rebalancer) rebalanceTopic(ctx context.Context, reader messageReader, w
 		n++
 	}
 
-	// TODO offset merken und für consumer groups schreiben (OFFSET AUS DEM NEUEN TOPIC)
-
 	r.log.Info().
 		Uint64("msgAmount", n).
 		Msg("Retrieved till high water mark")
 
-	// TODO write messages
-	// TODO read new messages and write them until this rebalancer is cancelled to restart the components listening to the new topics / consumer group offset aktualisieren
-
 	return nil
-}
-
-func (r *rebalancer) messagesTillHighWatermark() (kafka.Message, error) {
-	return kafka.Message{}, nil
 }

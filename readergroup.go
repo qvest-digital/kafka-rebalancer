@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/rs/zerolog"
 	"github.com/segmentio/kafka-go"
 	"golang.org/x/sync/errgroup"
 )
@@ -58,14 +59,19 @@ func initReaderGroup(ctx context.Context, config kafka.ReaderConfig, partitions 
 		group.readers[i] = kafka.NewReader(config)
 	}
 
-	go group.startFetching(ctx)
+	err := group.startFetchingTillHighWatermark(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting fetchTillHighWatermark: %w", err)
+	}
 
 	return &group, nil
 }
 
 type readerGroup struct {
-	readers  []*kafka.Reader
-	messages chan fetchMessageResponse
+	log               zerolog.Logger
+	readers           []*kafka.Reader
+	tillHighWatermark chan fetchMessageResponse
+	messages          chan fetchMessageResponse
 }
 
 type fetchMessageResponse struct {
@@ -75,8 +81,6 @@ type fetchMessageResponse struct {
 
 // Close closes the connections
 func (g *readerGroup) Close() error {
-	defer close(g.messages)
-
 	var errg errgroup.Group
 
 	for i := range g.readers {
@@ -86,7 +90,58 @@ func (g *readerGroup) Close() error {
 	return errg.Wait()
 }
 
-func (g *readerGroup) startFetching(ctx context.Context) {
+func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error {
+	g.tillHighWatermark = make(chan fetchMessageResponse)
+
+	var wg sync.WaitGroup
+	wg.Add(len(g.readers))
+
+	// the reader doesn't support returning the hwm, but we can calc it
+	// We don't want to use the lag, because it is just the difference between
+	// current offset and hwm. Due to compaction some offsets might be missing
+	hwms := make(map[int]int64, len(g.readers))
+
+	var errg errgroup.Group
+	for i := range g.readers {
+		n := i
+		errg.Go(func() error {
+			lag, err := g.readers[n].ReadLag(ctx)
+			hwms[n] = lag + g.readers[n].Offset()
+			return err
+		})
+	}
+	err := errg.Wait()
+	if err != nil {
+		close(g.tillHighWatermark)
+		return fmt.Errorf("reading high water mark: %w", err)
+	}
+
+	for i := range g.readers {
+		go func(i int) {
+			defer wg.Done()
+
+			for g.readers[i].Offset() <= hwms[i] {
+				msg, err := g.readers[i].FetchMessage(ctx)
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return
+				}
+				g.tillHighWatermark <- fetchMessageResponse{
+					msg: msg,
+					err: err,
+				}
+			}
+		}(i)
+	}
+
+	go func() {
+		wg.Wait()
+		close(g.tillHighWatermark)
+	}()
+
+	return nil
+}
+
+func (g *readerGroup) StartFetching(ctx context.Context) {
 	g.messages = make(chan fetchMessageResponse)
 
 	var wg sync.WaitGroup
@@ -112,6 +167,18 @@ func (g *readerGroup) startFetching(ctx context.Context) {
 	close(g.messages)
 }
 
+func (g *readerGroup) FetchTillHighWatermark(ctx context.Context) (kafka.Message, error) {
+	select {
+	case res, ok := <-g.tillHighWatermark:
+		if !ok {
+			return kafka.Message{}, io.EOF
+		}
+		return res.msg, res.err
+	case <-ctx.Done():
+		return kafka.Message{}, ctx.Err()
+	}
+}
+
 func (g *readerGroup) FetchMessage(ctx context.Context) (kafka.Message, error) {
 	select {
 	case res, ok := <-g.messages:
@@ -122,47 +189,4 @@ func (g *readerGroup) FetchMessage(ctx context.Context) (kafka.Message, error) {
 	case <-ctx.Done():
 		return kafka.Message{}, ctx.Err()
 	}
-}
-
-func (g *readerGroup) Lag() int64 {
-	var lag int64
-	// TODO what about the readers, which haven't fetched a message, yet (they might return 0)
-	for i := range g.readers {
-		lag += g.readers[i].Lag()
-	}
-	return lag
-}
-
-func (g *readerGroup) ReadLag(ctx context.Context) (int64, error) {
-	var errg errgroup.Group
-
-	// we are using the slice, because we are not writing concurrently
-	// on multiple indices
-	lags := make([]int64, len(g.readers))
-	go func() {
-		for i := range g.readers {
-			// copy to have the value in the closure (i is incremented by the loop)
-			n := i
-			errg.Go(func() error {
-				var err error
-				lags[n], err = g.readers[n].ReadLag(ctx)
-				if err != nil {
-					return err
-				}
-				return nil
-			})
-		}
-	}()
-
-	err := errg.Wait()
-	if err != nil {
-		return 0, err
-	}
-
-	var totalLag int64
-	for _, lag := range lags {
-		totalLag += lag
-	}
-
-	return totalLag, nil
 }

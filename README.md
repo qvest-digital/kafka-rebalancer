@@ -20,6 +20,21 @@ if err != nil {
 }
 ```
 
+## Progress of rebalancing in rebalancer
+
+1. Read till high watermark
+2. Sort theses messages by time
+3. Write these messages with new balancer in new topic
+4. Replicate new messages in existing topic to new topic (without checking the
+   time, to ensure right ordering current producers should be switched to new
+   balance algorithm before rebalancing with this tool)
+
+## Steps to rebalancer your messages
+
+1. Switch current services to new balancing algorithm
+2. Execute this rebalance script
+3. Switch current services to new topics
+
 ## Caveats
 
 - While rebalancing any order between messages is lost, except for the time
