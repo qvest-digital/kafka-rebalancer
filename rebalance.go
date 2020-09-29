@@ -26,7 +26,7 @@ func Topic(ctx context.Context, readerConfig kafka.ReaderConfig, targetTopic str
 
 	rb := rebalancer{
 		log:      log.With().Str("targetTopic", targetTopic).Logger(),
-		messages: newKeyStringMessageStore(),
+		messages: newMessageStore(),
 	}
 
 	return rb.rebalanceTopic(ctx, group, writer)

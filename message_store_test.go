@@ -174,9 +174,7 @@ func TestKeyStringMessageStore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			store := keyStringMessageStore{
-				msgs: make(map[string]timeOrderedMessages),
-			}
+			store := newMessageStore()
 			store.AddMessages(tt.inputMessages...)
 			act := store.Messages()
 

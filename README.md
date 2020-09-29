@@ -19,3 +19,8 @@ if err != nil {
 	return fmt.Errorf("rebalancing vehilces to vehiclesV2: %w", err)
 }
 ```
+
+## Caveats
+
+- While rebalancing any order between messages is lost, except for the time
+ordering.
