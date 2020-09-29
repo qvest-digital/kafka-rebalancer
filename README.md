@@ -39,3 +39,11 @@ if err != nil {
 
 - While rebalancing any order between messages is lost, except for the time
 ordering.
+
+
+## k8s
+
+```
+./bin/build.sh --docker-repository [ECR-URL] --aws
+./bin/run-k8s.sh --image [ECR-URL]
+```

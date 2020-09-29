@@ -116,6 +116,9 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 		return fmt.Errorf("reading high water mark: %w", err)
 	}
 
+	g.log.Info().
+		Str("highwatermarks", fmt.Sprintf("%#v", hwms)).Msg("got hwms")
+
 	for i := range g.readers {
 		go func(i int) {
 			defer wg.Done()

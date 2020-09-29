@@ -1,0 +1,6 @@
+/bin
+/.git
+/Dockerfile
+/.dockerignore
+/LICENSE
+/README.md
