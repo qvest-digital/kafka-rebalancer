@@ -20,7 +20,7 @@ import (
 // when a partitions slice of the length 0 is passed the group is
 // initialized with readers for all partitions of the provided topic
 // this is not a ConsumerGroup in the sense of kafka. If you want to use ConsumerGroups have a look at NewReader
-func initReaderGroup(ctx context.Context, config kafka.ReaderConfig, partitions ...int) (*readerGroup, error) {
+func initReaderGroup(ctx context.Context, log zerolog.Logger, config kafka.ReaderConfig, partitions ...int) (*readerGroup, error) {
 	if config.GroupID != "" {
 		return nil, errors.New("setting GroupID is not allowed")
 	}
@@ -52,6 +52,7 @@ func initReaderGroup(ctx context.Context, config kafka.ReaderConfig, partitions 
 
 	group := readerGroup{
 		readers: make([]*kafka.Reader, len(partitions)),
+		log:     log,
 	}
 
 	for i := range partitions {

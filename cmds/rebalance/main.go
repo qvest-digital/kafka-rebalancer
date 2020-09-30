@@ -73,5 +73,5 @@ func run(ctx context.Context, args []string, log zerolog.Logger) error {
 		readerConfig.Dialer.TLS = &tls.Config{}
 	}
 
-	return rebalance.Topic(ctx, readerConfig, targetTopic, &kafka.Hash{})
+	return rebalance.Topic(ctx, log, readerConfig, targetTopic, &kafka.Hash{})
 }

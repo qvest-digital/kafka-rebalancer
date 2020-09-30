@@ -7,12 +7,11 @@ import (
 	"io"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/segmentio/kafka-go"
 )
 
-func Topic(ctx context.Context, readerConfig kafka.ReaderConfig, targetTopic string, balancer kafka.Balancer) error {
-	group, err := initReaderGroup(ctx, readerConfig)
+func Topic(ctx context.Context, log zerolog.Logger, readerConfig kafka.ReaderConfig, targetTopic string, balancer kafka.Balancer) error {
+	group, err := initReaderGroup(ctx, log, readerConfig)
 	if err != nil {
 		return fmt.Errorf("init reader group: %w", err)
 	}
