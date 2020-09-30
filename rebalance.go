@@ -68,6 +68,8 @@ func (r *rebalancer) rebalanceTopic(ctx context.Context, reader messageReader, w
 
 	go reader.StartFetching(ctx)
 
+	r.log.Debug().Msg("StartFetching")
+
 	for ctx.Err() == nil {
 		msg, err := reader.FetchMessage(ctx)
 		if err != nil {

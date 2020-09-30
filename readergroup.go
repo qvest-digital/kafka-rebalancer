@@ -158,6 +158,7 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 					Bytes("key", msg.Key).
 					Int("partition", msg.Partition).
 					Int64("offset", msg.Offset).
+					Time("time", msg.Time).
 					Msg("fetched msg")
 
 				g.tillHighWatermark <- fetchMessageResponse{
