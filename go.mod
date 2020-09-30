@@ -3,7 +3,7 @@ module github.com/fvosberg/kafka-rebalancer
 go 1.15
 
 require (
-	github.com/fvosberg/kafka-go v0.2.1
+	github.com/frankban/quicktest v1.11.0 // indirect
 	github.com/golang/snappy v0.0.2 // indirect
 	github.com/klauspost/compress v1.11.0 // indirect
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
