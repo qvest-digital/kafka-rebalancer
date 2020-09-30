@@ -16,12 +16,13 @@ func Topic(ctx context.Context, log zerolog.Logger, readerConfig kafka.ReaderCon
 		return fmt.Errorf("init reader group: %w", err)
 	}
 
-	writer := &kafka.Writer{
-		Addr:         kafka.TCP(readerConfig.Brokers[0]),
+	writer := kafka.NewWriter(kafka.WriterConfig{
+		Brokers:      readerConfig.Brokers,
 		Topic:        targetTopic,
-		RequiredAcks: kafka.RequireAll,
+		RequiredAcks: int(kafka.RequireAll),
 		Balancer:     balancer,
-	}
+		Dialer:       readerConfig.Dialer,
+	})
 
 	rb := rebalancer{
 		log:      log.With().Str("targetTopic", targetTopic).Logger(),
