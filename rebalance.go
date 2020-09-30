@@ -66,7 +66,8 @@ func (r *rebalancer) rebalanceTopic(ctx context.Context, reader messageReader, w
 	// TODO offset merken und für consumer groups schreiben (OFFSET AUS DEM NEUEN TOPIC)
 	// TODO TODO read target topic for offsets and commit theses offsets for the configured consumer groups
 
-	reader.StartFetching(ctx)
+	go reader.StartFetching(ctx)
+
 	for ctx.Err() == nil {
 		msg, err := reader.FetchMessage(ctx)
 		if err != nil {

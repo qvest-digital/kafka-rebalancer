@@ -177,6 +177,7 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 	go func() {
 		wg.Wait()
 		close(g.tillHighWatermark)
+		g.log.Debug().Msg("Closed high watermark chan")
 	}()
 
 	return nil
@@ -190,6 +191,7 @@ func (g *readerGroup) StartFetching(ctx context.Context) {
 
 	for i := range g.readers {
 		go func(reader *kafka.Reader) {
+			g.log.Debug().Int("partition", reader.Config().Partition).Msg("Starting fetching")
 			for {
 				msg, err := reader.FetchMessage(ctx)
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
