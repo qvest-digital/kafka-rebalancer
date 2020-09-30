@@ -108,7 +108,7 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 	for i := range g.readers {
 		n := i
 		errg.Go(func() error {
-			con, err := g.config.Dialer.DialLeader(ctx, "tcp", g.config.Brokers[0], g.config.Topic, i)
+			con, err := g.config.Dialer.DialLeader(ctx, "tcp", g.config.Brokers[0], g.config.Topic, g.readers[n].Config().Partition)
 			if err != nil {
 				return fmt.Errorf("faield to dial: %w", err)
 			}
@@ -120,7 +120,7 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 				return fmt.Errorf("faield to look up offset: %w", err)
 			}
 
-			g.log.Debug().Int64("offset", offset).Int("partition", i).Msg("fetched high water mark offset")
+			g.log.Debug().Int64("offset", offset).Int("partition", g.readers[n].Config().Partition).Msg("fetched high water mark offset")
 			hwms[n] = offset
 
 			return nil
