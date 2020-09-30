@@ -139,6 +139,10 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 		go func(i int) {
 			defer wg.Done()
 
+			if hwms[i] <= 0 {
+				return
+			}
+
 			for g.readers[i].Offset() < hwms[i] {
 				logger := g.log.With().
 					Int("partition", i).
