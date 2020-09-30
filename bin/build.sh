@@ -13,13 +13,13 @@ while test $# -gt 0; do
       echo "$0 [options]"
       echo " "
       echo "options:"
-      echo "-h, --help                           show brief help"
-      echo "--docker-repository [DOCKER_REPO]    specify the url for the docker repository"
-      echo "--aws                                log into ECR"
+      echo "-h, --help             show brief help"
+      echo "--image                [DOCKER_REPO]    specify the url for the docker repository"
+      echo "--aws                  log into ECR"
       exit 0
       ;;
 
-    --docker-repository)
+    --image)
       shift
       if test $# -gt 0; then
         DOCKER_REPO="$1"
