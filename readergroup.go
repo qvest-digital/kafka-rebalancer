@@ -125,15 +125,37 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 			defer wg.Done()
 
 			for g.readers[i].Offset() <= hwms[i] {
+				logger := g.log.With().
+					Int("partition", i).
+					Int64("offset", g.readers[i].Offset()).
+					Int64("hwm", hwms[i]).
+					Logger()
+
+				logger.Debug().Msg("fetching msg")
+
 				msg, err := g.readers[i].FetchMessage(ctx)
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					logger.Err(err).Msg("ctx problem")
 					return
 				}
+
+				logger.Debug().
+					Bytes("key", msg.Key).
+					Int("partition", msg.Partition).
+					Int64("offset", msg.Offset).
+					Msg("fetched msg")
+
 				g.tillHighWatermark <- fetchMessageResponse{
 					msg: msg,
 					err: err,
 				}
 			}
+
+			g.log.Debug().
+				Int("partition", i).
+				Int64("offset", g.readers[i].Offset()).
+				Int64("hwm", hwms[i]).
+				Msg("finished reading till high water mark")
 		}(i)
 	}
 
