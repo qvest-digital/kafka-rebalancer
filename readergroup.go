@@ -33,14 +33,17 @@ func initReaderGroup(ctx context.Context, log zerolog.Logger, config kafka.Reade
 		}
 		dialer := config.Dialer
 		if dialer == nil {
-			dialer = kafka.DefaultDialer
+			config.Dialer = kafka.DefaultDialer
 		}
-		pp, err := dialer.LookupPartitions(
-			ctx,
-			"tcp",
-			config.Brokers[0],
-			config.Topic,
-		)
+
+		con, err := config.Dialer.DialContext(ctx, "tcp", config.Brokers[0])
+		if err != nil {
+			return nil, fmt.Errorf("dialing: %w", err)
+		}
+
+		defer con.Close()
+
+		pp, err := con.ReadPartitions(config.Topic)
 		if err != nil {
 			return nil, fmt.Errorf("looking up partitions: %w", err)
 		}
@@ -51,6 +54,7 @@ func initReaderGroup(ctx context.Context, log zerolog.Logger, config kafka.Reade
 	}
 
 	group := readerGroup{
+		config:  config,
 		readers: make([]*kafka.Reader, len(partitions)),
 		log:     log,
 	}
@@ -70,6 +74,7 @@ func initReaderGroup(ctx context.Context, log zerolog.Logger, config kafka.Reade
 
 type readerGroup struct {
 	log               zerolog.Logger
+	config            kafka.ReaderConfig
 	readers           []*kafka.Reader
 	tillHighWatermark chan fetchMessageResponse
 	messages          chan fetchMessageResponse
@@ -97,18 +102,28 @@ func (g *readerGroup) startFetchingTillHighWatermark(ctx context.Context) error 
 	var wg sync.WaitGroup
 	wg.Add(len(g.readers))
 
-	// the reader doesn't support returning the hwm, but we can calc it
-	// We don't want to use the lag, because it is just the difference between
-	// current offset and hwm. Due to compaction some offsets might be missing
 	hwms := make(map[int]int64, len(g.readers))
 
 	var errg errgroup.Group
 	for i := range g.readers {
 		n := i
 		errg.Go(func() error {
-			lag, err := g.readers[n].ReadLag(ctx)
-			hwms[n] = lag + g.readers[n].Offset()
-			return err
+			con, err := g.config.Dialer.DialLeader(ctx, "tcp", g.config.Brokers[0], g.config.Topic, i)
+			if err != nil {
+				return fmt.Errorf("faield to dial: %w", err)
+			}
+
+			defer con.Close()
+
+			offset, err := con.ReadLastOffset()
+			if err != nil {
+				return fmt.Errorf("faield to look up offset: %w", err)
+			}
+
+			g.log.Debug().Int64("offset", offset).Int("partition", i).Msg("fetched high water mark offset")
+			hwms[n] = offset
+
+			return nil
 		})
 	}
 	err := errg.Wait()
