@@ -1,6 +1,7 @@
 #!/bin/bash
 
 IMAGE=""
+SUFFIX=""
 
 while test $# -gt 0; do
   case "$1" in
@@ -27,6 +28,17 @@ while test $# -gt 0; do
       shift
       ;;
 
+    --suffix)
+      shift
+      if test $# -gt 0; then
+        SUFFIX="-$1"
+      else
+        echo -e "\n\nNo suffix specified\n\n"
+        exit 1
+      fi
+      shift
+      ;;
+
     *)
       break
       ;;
@@ -38,4 +50,4 @@ if [[ -z "$IMAGE" ]]; then
   exit 1
 fi
 
-kubectl run -t -i --rm --restart=Never --image="${IMAGE}" "kafka-rebalancer-$RANDOM" --image-pull-policy=Always -- "$@"
+kubectl run --restart=Never --image="${IMAGE}" "kafka-rebalancer$SUFFIX-$RANDOM" --image-pull-policy=Always -- "$@"
